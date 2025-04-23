@@ -8,23 +8,32 @@
 // https://www.gnu.org/licenses/agpl-3.0.html
 // ===================================================================================================
 
-import Foundation
+//
+//  FPSUtils.swift
+//  PlayKit
+//
+//  Created by Noam Tamim on 30/05/2018.
+//
 
-public enum FPSError: Error {
-    
-    // License response errors
+import Foundation
+import SwiftyJSON
+
+enum FPSError: Error {
+    case emptyServerResponse
+    case failedToConvertServerResponse
     case malformedServerResponse
     case noCKCInResponse
     case malformedCKCInResponse
-    case serverError(_ error: Error, _ url: URL)
-    case invalidLicenseDuration
-
-    // License requests errors (can't generate request)
     case missingDRMParams
     case invalidKeyRequest
     case invalidMediaFormat
     case persistenceNotSupported
-    case missingAssetId(_ url: URL)
+}
+
+enum FPSInternalError: Error {
+    case unknownAssetKeyId
+    case unknownAssetMode
+    case invalidAssetKeyId
 }
 
 protocol FPSLicenseRequest {
@@ -53,9 +62,31 @@ class FPSLicense: Codable {
     let expiryDate: Date?
     var data: Data
     
-    init(ckc: Data, duration: TimeInterval) {
+    init(jsonResponse: Data?) throws {
+        guard let data = jsonResponse else {
+            throw FPSError.emptyServerResponse
+        }
+        
+        guard let json = try? JSON(data: data, options: []) else {
+            throw FPSError.failedToConvertServerResponse
+        }
+        
+        guard let b64CKC = json["ckc"].string else {
+            throw FPSError.noCKCInResponse
+        }
+        
+        guard let ckc = Data(base64Encoded: b64CKC) else {
+            throw FPSError.malformedCKCInResponse
+        }
+        
+        let offlineExpiry = json["persistence_duration"].double ?? FPSLicense.defaultExpiry
+        
+        if ckc.count == 0 {
+            throw FPSError.malformedCKCInResponse
+        }
+        
         self.data = ckc
-        self.expiryDate = Date(timeIntervalSinceNow: duration)
+        self.expiryDate = Date(timeIntervalSinceNow: offlineExpiry)
     }
     
     init(legacyData: Data) {
@@ -104,13 +135,13 @@ extension LocalDataStore {
 
 @objc public class FPSExpirationInfo: NSObject {
     
-    @objc public let expirationDate: Date
+    public let expirationDate: Date
     
     init(date: Date) {
         self.expirationDate = date
     }
     
-    @objc public func isValid() -> Bool {
+    public func isValid() -> Bool {
         return self.expirationDate > Date()
     }
 }
@@ -119,81 +150,32 @@ class FPSUtils {
     
     static let skdUrlPattern = try! NSRegularExpression(pattern: "URI=\"skd://([\\w-]+)\"", options: [])
     
-    static func findKeys(url: URL, isMaster: Bool, stopOnKey: Bool = true) -> [String]? {
-        
-        let playlist: String
-        do {
-            playlist = try String(contentsOf: url)
-        } catch {
-            PKLog.error("Can't read playlist at \(url)"); 
-            return nil
+    static func extractAssetId(at location: URL) -> String? {
+        // Master should have the following line:
+        // #EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,URI="skd://entry-1_x14v3p06",KEYFORMAT="com.apple.streamingkeydelivery",KEYFORMATVERSIONS="1"
+        // The following code looks for the first line with "EXT-X-SESSION-KEY" tag.
+        guard let master = try? String(contentsOf: location) else { 
+            PKLog.error("Can't read master playlist \(location)"); 
+            return nil 
         }
         
-        var keys = [String]()
-        var lists = [URL]()
-
-        for line in playlist.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("#EXT-X-SESSION-KEY") || trimmed.hasPrefix("#EXT-X-KEY") {
-                // #EXT-X-SESSION-KEY:METHOD=SAMPLE-AES,URI="skd://entry-1_x14v3p06",KEYFORMAT="com.apple.streamingkeydelivery",KEYFORMATVERSIONS="1"
-                // - OR -
-                // #EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://entry-1_mq299xmb",KEYFORMAT="com.apple.streamingkeydelivery",KEYFORMATVERSIONS="1"
+        let lines = master.components(separatedBy: .newlines)
+        var assetId: String? = nil
+        
+        for line in lines {
+            if line.trimmingCharacters(in: .whitespaces).hasPrefix("#EXT-X-SESSION-KEY") {
                 guard let match = skdUrlPattern.firstMatch(in: line, options: [], range: NSMakeRange(0, line.count)) else { continue }
                 if match.numberOfRanges < 2 { continue }
-                
-                // Extract the actual assetId from the match (see pattern).
                 let assetIdRange = match.range(at: 1)
                 let start = line.index(line.startIndex, offsetBy: assetIdRange.location)
                 let end = line.index(line.startIndex, offsetBy: assetIdRange.location + assetIdRange.length - 1)
-                let assetId = String(line[start...end])
+                assetId = String(line[start...end])
                 
-                keys.append(assetId)
-                if stopOnKey {
-                    break
-                }
-            
-            } else if isMaster && !trimmed.isEmpty && !trimmed.hasPrefix("#") {
-                // Look for chunk lists too
-                guard let list = URL(string: trimmed, relativeTo: url) else {
-                    PKLog.warning("Failed to create URL from \(url) and \(trimmed)")
-                    continue
-                }
-                lists.append(list)
-            }
-        }
-        
-        if keys.count > 0 {
-            return keys
-        }
-        
-        if isMaster {
-            // If we're in a master playlist and there are chunklists, call this function
-            // recursively to find the keys in chunklists.
-            for list in lists {
-                if let keys = findKeys(url: list, isMaster: false) {
-                    return keys
-                }
+                return assetId
             }
         }
         
         return nil
-    }
-        
-    // Find the FairPlay assetId (also called keyId) for a downloaded asset.
-    static func extractAssetId(at location: URL) -> String? {
-        
-        // Require a downloaded asset.
-        if !"file".equals(location.scheme) && !"localhost".equals(location.host) {
-            PKLog.error("Can only extract assetId from local resources")
-            return nil
-        }
-        
-        guard let keys = findKeys(url: location, isMaster: true) else {
-            PKLog.error("No keys")
-            return nil
-        }
-        
-        return keys[0]  // if keys is not nil, there's at least one key.
     }
     
     static func removeOfflineLicense(for location: URL, dataStore: LocalDataStore) -> Bool {
@@ -233,16 +215,5 @@ extension PKMediaSource {
     
     func isWidevineClassic() -> Bool {
         return mediaFormat == .wvm
-    }
-}
-
-extension String {
-    func equals(_ other: String?) -> Bool {
-        
-        guard let other = other else {
-            return false // other is nil
-        }
-        
-        return self == other
     }
 }

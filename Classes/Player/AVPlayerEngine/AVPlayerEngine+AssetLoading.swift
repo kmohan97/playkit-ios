@@ -27,6 +27,7 @@ extension AVPlayerEngine {
          We can play this asset. Create a new `AVPlayerItem` and make
          it our player's current item.
          */
+         print("\n\nRGLOG::AVPlayerEngine::initializePlayerItem::newAsset - \(newAsset)\n\npreferredPeakBitRate - \(newAsset.playerSettings.network.preferredPeakBitRate)\n\n \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         let playerItem = AVPlayerItem(asset: newAsset.avAsset)
         playerItem.preferredPeakBitRate = newAsset.playerSettings.network.preferredPeakBitRate
 
@@ -74,7 +75,7 @@ extension AVPlayerEngine {
                         let stringFormat = NSLocalizedString("error.asset_key_%@_failed.description", comment: "Can't use this AVAsset because one of its keys failed to load")
                         
                         let message = String.localizedStringWithFormat(stringFormat, key)
-                        
+                        print("\n\nRGLOG::AVPlayerEngine::asynchronouslyLoadURLAsset::\(message)\n\n \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
                         PKLog.error(message)
                         self.post(event: PlayerEvent.Error(error: PlayerError.failedToLoadAssetFromKeys(rootError: error)))
                         
@@ -86,7 +87,7 @@ extension AVPlayerEngine {
                 if !newAsset.avAsset.isPlayable {
                     newAsset.status = .faild
                     let message = NSLocalizedString("error.asset_not_playable.description", comment: "Can't use this AVAsset because it isn't playable")
-                    
+                    print("\n\nRGLOG::AVPlayerEngine::asynchronouslyLoadURLAsset::\(message)\n\n \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
                     PKLog.error(message)
                     self.post(event: PlayerEvent.Error(error: PlayerError.assetNotPlayable))
                     

@@ -14,17 +14,13 @@ import Foundation
 @objc public class MediaConfig: NSObject {
 
     @objc public var mediaEntry: PKMediaEntry
-    @objc public var startTime: TimeInterval = TimeInterval.nan
+    @objc public var startTime: TimeInterval = 0
     
     @objc public override var description: String {
-        return "Media config, mediaEntry: \(self.mediaEntry) startTime: \(self.startTime)"
+        return "Media config, mediaEntry: \(self.mediaEntry)\nstartTime: \(self.startTime)"
     }
     
-    @objc public init(mediaEntry: PKMediaEntry) {
-        self.mediaEntry = mediaEntry
-    }
-    
-    @objc public init(mediaEntry: PKMediaEntry, startTime: TimeInterval) {
+    @objc public init(mediaEntry: PKMediaEntry, startTime: TimeInterval = 0) {
         self.mediaEntry = mediaEntry
         self.startTime = startTime
     }

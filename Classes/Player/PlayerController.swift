@@ -9,7 +9,6 @@
 // ===================================================================================================
 
 import Foundation
-import AVFoundation
 
 class PlayerController: NSObject, Player {
     
@@ -19,6 +18,8 @@ class PlayerController: NSObject, Player {
     
     var onEventBlock: ((PKEvent) -> Void)?
     
+    weak var delegate: PlayerDelegate?
+    
     fileprivate var currentPlayer: PlayerEngine = DefaultPlayerWrapper() {
         // Initialize the currentPlayer to DefaultPlayerWrapper, which does nothing except printing warnings.
         didSet {
@@ -26,8 +27,6 @@ class PlayerController: NSObject, Player {
             timeObserver.enabled = !(currentPlayer is DefaultPlayerWrapper)
         }
     }
-    
-    var playerEngineWrapper: PlayerEngineWrapper?
     
     /// Current selected media source
     fileprivate var selectedSource: PKMediaSource?
@@ -38,124 +37,13 @@ class PlayerController: NSObject, Player {
     /// A semaphore to make sure prepare calling will wait till assetToPrepare it set.
     private let prepareSemaphore = DispatchSemaphore(value: 0)
     
-    let sessionUUID = UUID()
-    var mediaSessionUUID: UUID?
-    
-    // Every player that is created should own Reachability instance
-    let reachability = PKReachability()
-    var shouldRefresh: Bool = false
-    
-    /* Time Observation */
-    lazy var timeObserver = TimeObserver(timeProvider: self)
-    var playheadObserverUUID: UUID?
-    
-    struct PausePosition {
-        let date: Date = Date()
-        let savedPosition: TimeInterval
-        
-        init(_ position: TimeInterval) {
-            self.savedPosition = position
-        }
-    }
-    var liveDVRPausedPosition: PausePosition?
-    
-    /************************************************************/
-    // MARK: - Initialization
-    /************************************************************/
-    
-    public override init() {
-        super.init()
-        
-        self.currentPlayer.onEventBlock = { [weak self] event in
-            guard let self = self else { return }
-            PKLog.verbose("postEvent:: \(event)")
-            self.onEventBlock?(event)
-        }
-        
-        self.playheadObserverUUID = self.timeObserver.addPeriodicObserver(interval: 0.1, observeOn: DispatchQueue.global()) { [weak self] (time) in
-            guard let self = self else { return }
-            self.onEventBlock?(PlayerEvent.PlayheadUpdate(currentTime: time))
-        }
-        
-        self.onEventBlock = nil
-    }
-    
-    deinit {
-        if let uuid = self.playheadObserverUUID {
-            self.timeObserver.removePeriodicObserver(uuid)
-        }
-        
-        self.timeObserver.stopTimer()
-        self.timeObserver.removePeriodicObservers()
-        self.timeObserver.removeBoundaryObservers()
-    }
-    
-    // ***************************** //
-    // MARK: - Player
-    // ***************************** //
-    
-    public var mediaEntry: PKMediaEntry? {
-        return self.mediaConfig?.mediaEntry
-    }
-    
     let settings = PKPlayerSettings()
     
     var mediaFormat = PKMediaSource.MediaFormat.unknown
     
-    public var sessionId: String {
-        return self.sessionUUID.uuidString + ":" + (self.mediaSessionUUID?.uuidString ?? "")
+    public var mediaEntry: PKMediaEntry? {
+        return self.mediaConfig?.mediaEntry
     }
-    
-    func addObserver(_ observer: AnyObject, event: PKEvent.Type, block: @escaping (PKEvent) -> Void) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    func addObserver(_ observer: AnyObject, events: [PKEvent.Type], block: @escaping (PKEvent) -> Void) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    func removeObserver(_ observer: AnyObject, event: PKEvent.Type) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    func removeObserver(_ observer: AnyObject, events: [PKEvent.Type]) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    func isLive() -> Bool {
-        let avPlayerItemAccessLogEventPlaybackTypeLive = "LIVE"
-        if let playbackType = currentPlayer.playbackType, playbackType == avPlayerItemAccessLogEventPlaybackTypeLive {
-            return true
-        }
-        
-        if let entry = self.mediaEntry {
-            if entry.mediaType == MediaType.live || entry.mediaType == MediaType.dvrLive {
-                return true
-            }
-        }
-        
-        return false
-    }
-    
-    public func getController(type: PKController.Type) -> PKController? {
-        if type is PKVRController.Type && self.currentPlayer is VRPlayerEngine {
-            return PKVRController(player: self.currentPlayer)
-        }
-        
-        return nil
-    }
-    
-    public func updatePluginConfig(pluginName: String, config: Any) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    func updateTextTrackStyling() {
-        self.currentPlayer.updateTextTrackStyling(self.settings.textTrackStyling)
-    }
-    
-    // ***************************** //
-    // MARK: - BasicPlayer
-    // ***************************** //
     
     public var duration: TimeInterval {
         return self.currentPlayer.duration
@@ -167,16 +55,6 @@ class PlayerController: NSObject, Player {
     
     public var isPlaying: Bool {
         return self.currentPlayer.isPlaying
-    }
-    
-    public weak var view: PlayerView? {
-        get { return self.currentPlayer.view }
-        set { self.currentPlayer.view = newValue }
-    }
-
-    public var assetToPrepare: AVURLAsset? {
-        get { return self.currentPlayer.assetToPrepare }
-        set { self.currentPlayer.assetToPrepare = newValue }
     }
     
     public var currentTime: TimeInterval {
@@ -205,6 +83,15 @@ class PlayerController: NSObject, Player {
         return self.currentPlayer.currentTextTrack
     }
     
+    public weak var view: PlayerView? {
+        get { return self.currentPlayer.view }
+        set { self.currentPlayer.view = newValue }
+    }
+    
+    public var sessionId: String {
+        return self.sessionUUID.uuidString + ":" + (self.mediaSessionUUID?.uuidString ?? "")
+    }
+    
     public var rate: Float {
         get {
             return self.currentPlayer.rate
@@ -227,107 +114,88 @@ class PlayerController: NSObject, Player {
         return self.currentPlayer.loadedTimeRanges
     }
     
-    private func shouldDVRLivePlayFromLiveEdge() -> Bool {
-        if let pausedPosition = liveDVRPausedPosition, currentTime == 0 {
-            let timePassed: TimeInterval = Date().timeIntervalSince(pausedPosition.date)
-            let shouldPlayFromLiveEdge = timePassed > pausedPosition.savedPosition
-            liveDVRPausedPosition = nil
-            return shouldPlayFromLiveEdge
-        }
-        return false
-    }
+    let sessionUUID = UUID()
+    var mediaSessionUUID: UUID?
     
-    func play() {
-        guard let mediaEntry = self.mediaEntry else {
-            currentPlayer.play()
-            return
-        }
-        
-        switch mediaEntry.mediaType {
-        case .live:
-            currentPlayer.playFromLiveEdge()
-        case .dvrLive:
-            if shouldDVRLivePlayFromLiveEdge() {
-                currentPlayer.playFromLiveEdge()
-            } else {
-                currentPlayer.play()
-            }
-        default:
-            currentPlayer.play()
-        }
-    }
+    // Every player that is created should own Reachability instance
+    let reachability = PKReachability()
+    var shouldRefresh: Bool = false
     
-    func pause() {
-        // Save the paused position only if the player is playing, not every time the pause is called.
-        if mediaEntry?.mediaType == .dvrLive, currentPlayer.isPlaying {
-            liveDVRPausedPosition = PausePosition(currentTime)
+    /* Time Observation */
+    lazy var timeObserver = TimeObserver(timeProvider: self)
+    var playheadObserverUUID: UUID?
+    
+    /************************************************************/
+    // MARK: - Initialization
+    /************************************************************/
+    
+    public override init() {        
+        super.init()
+
+        self.currentPlayer.onEventBlock = { [weak self] event in
+            guard let self = self else { return }
+            PKLog.verbose("postEvent:: \(event)")
+            self.onEventBlock?(event)
         }
         
-        self.currentPlayer.pause()
-    }
-    
-    func resume() {
-        guard let mediaEntry = self.mediaEntry else {
-            currentPlayer.resume()
-            return
+        self.playheadObserverUUID = self.timeObserver.addPeriodicObserver(interval: 0.1, observeOn: DispatchQueue.global()) { [weak self] (time) in
+            guard let self = self else { return }
+            self.onEventBlock?(PlayerEvent.PlayheadUpdate(currentTime: time))
         }
         
-        switch mediaEntry.mediaType {
-        case .live:
-            currentPlayer.playFromLiveEdge()
-        case .dvrLive:
-            if shouldDVRLivePlayFromLiveEdge() {
-                currentPlayer.playFromLiveEdge()
-            } else {
-                currentPlayer.resume()
-            }
-        default:
-            currentPlayer.resume()
+        self.onEventBlock = nil
+    }
+    
+    deinit {
+        if let uuid = self.playheadObserverUUID {
+            self.timeObserver.removePeriodicObserver(uuid)
         }
-    }
-    
-    func stop() {
-        self.currentPlayer.stop()
-    }
-    
-    func replay() {
-        self.currentPlayer.replay()
-    }
-    
-    func seek(to time: TimeInterval) {
-        self.currentPlayer.currentPosition = time
-    }
-    
-    public func selectTrack(trackId: String) {
-        self.currentPlayer.selectTrack(trackId: trackId)
-    }
-    
-    func destroy() {
+        
         self.timeObserver.stopTimer()
         self.timeObserver.removePeriodicObservers()
         self.timeObserver.removeBoundaryObservers()
-        self.currentPlayer.stop()
-        self.currentPlayer.destroy()
-        self.removeAssetRefreshObservers()
     }
     
-    func prepare(_ mediaConfig: MediaConfig, mediaAsset: AVURLAsset? = nil) {
-        self.currentPlayer.prepare(mediaConfig, mediaAsset: mediaAsset)
+    /************************************************************/
+    // MARK: - Functions
+    /************************************************************/
+    
+    func setMedia(from mediaConfig: MediaConfig) {
+        self.mediaConfig = mediaConfig
         
-        if let source = self.selectedSource {
-            self.mediaFormat = source.mediaFormat
+        // create new media session uuid
+        self.mediaSessionUUID = UUID()
+        
+        // get the preferred media source and post source selected event
+        guard let (selectedSource, handler) = SourceSelector.selectSource(from: mediaConfig.mediaEntry) else { return }
+        self.onEventBlock?(PlayerEvent.SourceSelected(mediaSource: selectedSource))
+        self.selectedSource = selectedSource
+        self.assetHandler = handler
+        
+        // update the media source request adapter with new media uuid if using kaltura request adapter
+        var pms = selectedSource
+        self.updateRequestAdapter(in: &pms)
+        
+        // Take saved eventBlock from DefaultPlayerWrapper
+        // Must be called before `self.currentPlayer` reference is changed
+        let eventBlock = self.currentPlayer.onEventBlock
+        
+        // Take saved view from DefaultPlayerWrapper
+        // Must be called before `self.currentPlayer` reference is changed
+        let playerView = self.currentPlayer.view
+        
+        // if create player wrapper returns yes meaning a new wrapper was created, otherwise same wrapper as last time is used.
+        if self.createPlayerWrapper(mediaConfig) {
+            // After Setting PlayerWrapper set saved player's params
+            self.currentPlayer.onEventBlock = eventBlock
+            self.currentPlayer.view = playerView
+            self.currentPlayer.mediaConfig = mediaConfig
         }
+        
+        self.currentPlayer.loadMedia(from: self.selectedSource, handler: handler)
     }
     
-    func startBuffering() {
-        currentPlayer.startBuffering()
-    }
-    
-    // ****************************************** //
-    // MARK: - Private Functions
-    // ****************************************** //
-    
-    /// Creates the wrapper if we haven't created it yet, otherwise uses the same instance we have.
+    /// creates the wrapper if we haven't created it yet, otherwise uses the same instance we have.
     /// - Returns: true if a new player was created and false if wrapper already exists.
     private func createPlayerWrapper(_ mediaConfig: MediaConfig) -> Bool {
         let isCreated: Bool
@@ -366,59 +234,98 @@ class PlayerController: NSObject, Player {
             currentPlayer.settings = self.settings
         }
         
-        if let playerEW = playerEngineWrapper {
-            playerEW.playerEngine = currentPlayer
-            currentPlayer = playerEW
-        }
-        
         return isCreated
     }
     
-    // ****************************************** //
-    // MARK: - Public Functions
-    // ****************************************** //
+    func prepare(_ mediaConfig: MediaConfig) {
+        self.currentPlayer.prepare(mediaConfig)
+        
+        if let source = self.selectedSource {
+            self.mediaFormat = source.mediaFormat
+        }
+    }
     
-    func setMedia(from mediaConfig: MediaConfig, mediaAsset: AVURLAsset?) {
-        self.mediaConfig = mediaConfig
-        
-        // create new media session uuid
-        self.mediaSessionUUID = UUID()
-        
-        // get the preferred media source and post source selected event
-        guard let (selectedSource, handler) = SourceSelector.selectSource(from: mediaConfig.mediaEntry) else { return }
-        self.onEventBlock?(PlayerEvent.SourceSelected(mediaSource: selectedSource))
-        self.selectedSource = selectedSource
-        self.assetHandler = handler
-        
-        // Update the selected source if there are external subtitles.
-        selectedSource.externalSubtitle = mediaConfig.mediaEntry.externalSubtitles
-        
-        // update the media source request adapter with new media uuid if using kaltura request adapter
-        var pms = selectedSource
-        self.updateRequestAdapter(in: &pms)
-        
-        // Take saved eventBlock from DefaultPlayerWrapper
-        // Must be called before `self.currentPlayer` reference is changed
-        let eventBlock = self.currentPlayer.onEventBlock
-        
-        // Take saved view from DefaultPlayerWrapper
-        // Must be called before `self.currentPlayer` reference is changed
-        let playerView = self.currentPlayer.view
-        
-        // if create player wrapper returns yes meaning a new wrapper was created, otherwise same wrapper as last time is used.
-        if self.createPlayerWrapper(mediaConfig) {
-            // After Setting PlayerWrapper set saved player's params
-            self.currentPlayer.onEventBlock = eventBlock
-            self.currentPlayer.view = playerView
+    func play() {
+        if self.mediaEntry?.mediaType == .live {
+            self.currentPlayer.playFromLiveEdge()
+        } else {
+            self.currentPlayer.play()
+        }
+    }
+    
+    func pause() {
+        self.currentPlayer.pause()
+    }
+    
+    func resume() {
+        self.play()
+    }
+    
+    func stop() {
+        self.currentPlayer.stop()
+    }
+    
+    func replay() {
+        self.currentPlayer.replay()
+    }
+    
+    func seek(to time: TimeInterval) {
+        self.currentPlayer.currentPosition = time
+    }
+    
+    func isLive() -> Bool {
+        let avPlayerItemAccessLogEventPlaybackTypeLive = "LIVE"
+        if let playbackType = currentPlayer.playbackType, playbackType == avPlayerItemAccessLogEventPlaybackTypeLive {
+            return true
         }
         
-        // Update the mediaConfig
-        self.currentPlayer.mediaConfig = mediaConfig
-       
-        // Reset the pause position
-        liveDVRPausedPosition = nil
+        if let entry = self.mediaEntry {
+            if entry.mediaType == MediaType.live || entry.mediaType == MediaType.dvrLive {
+                return true
+            }
+        }
         
-        self.currentPlayer.loadMedia(from: self.selectedSource, mediaAsset: mediaAsset, handler: handler)
+        return false
+    }
+    
+    func destroy() {
+        self.timeObserver.stopTimer()
+        self.timeObserver.removePeriodicObservers()
+        self.timeObserver.removeBoundaryObservers()
+        self.currentPlayer.destroy()
+        self.removeAssetRefreshObservers()
+    }
+    
+    func addObserver(_ observer: AnyObject, event: PKEvent.Type, block: @escaping (PKEvent) -> Void) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    func addObserver(_ observer: AnyObject, events: [PKEvent.Type], block: @escaping (PKEvent) -> Void) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    func removeObserver(_ observer: AnyObject, event: PKEvent.Type) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    func removeObserver(_ observer: AnyObject, events: [PKEvent.Type]) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    public func selectTrack(trackId: String) {
+        self.currentPlayer.selectTrack(trackId: trackId)
+    }
+    
+    public func updatePluginConfig(pluginName: String, config: Any) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    public func getController(type: PKController.Type) -> PKController? {
+        if type is PKVRController.Type && self.currentPlayer is VRPlayerEngine {
+            return PKVRController(player: self.currentPlayer)
+        }
+        
+        return nil
     }
 }
 
@@ -437,17 +344,9 @@ fileprivate extension PlayerController {
             mediaSource.contentRequestAdapter = adapter
         }
         
-        // Maybe update licenseRequestAdapter and fpsLicenseRequestDelegate in params
-        let drmAdapter = self.settings.licenseRequestAdapter
-        let licenseProvider = self.settings.fairPlayLicenseProvider
-        
-        if let drmData = mediaSource.drmData {
-            for d in drmData {
-                d.requestAdapter = drmAdapter
-                
-                if let fps = d as? FairPlayDRMParams {
-                    fps.licenseProvider = licenseProvider
-                }
+        if let adapter = self.settings.licenseRequestAdapter, let drmData = mediaSource.drmData {
+            for p in drmData {
+                p.requestAdapter = adapter
             }
         }
     }

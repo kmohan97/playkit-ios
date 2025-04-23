@@ -11,33 +11,12 @@
 import Foundation
 import AVFoundation
 
-@objc enum PKAssetStatus: Int, CustomStringConvertible {
-    case new
-    case preparing
-    case prepared
-    case faild
-    
-    var description: String {
-        switch self {
-        case .new: return "new"
-        case .preparing: return "preparing"
-        case .prepared: return "prepared"
-        case .faild: return "faild"
-        }
-    }
-}
-
-class PKAsset: NSObject {
+struct PKAsset {
     let avAsset: AVURLAsset
     let playerSettings: PKPlayerSettings
-    let autoBuffer: Bool
-    @objc dynamic var status: PKAssetStatus = .new
     
-    init(avAsset: AVURLAsset, playerSettings: PKPlayerSettings, autoBuffer: Bool) {
+    init(avAsset: AVURLAsset, playerSettings: PKPlayerSettings) {
         self.avAsset = avAsset
         self.playerSettings = playerSettings.createCopy()
-        self.autoBuffer = autoBuffer
-        
-        super.init()
     }
 }

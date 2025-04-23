@@ -14,27 +14,12 @@ import AVFoundation
 /// A simple `UIView` subclass that is backed by an `AVPlayerLayer` layer.
 @objc public class PlayerView: UIView {
     
-    @objc public var player: AVPlayer? {
+    var player: AVPlayer? {
         get {
             return playerLayer.player
         }
         set {
             playerLayer.player = newValue
-        }
-    }
-    
-    public override var contentMode: UIView.ContentMode {
-        didSet {
-            switch self.contentMode {
-            case .scaleAspectFill:
-                playerLayer.videoGravity = .resizeAspectFill
-            case .scaleAspectFit:
-                playerLayer.videoGravity = .resizeAspect
-            case .scaleToFill:
-                playerLayer.videoGravity = .resize
-            default:
-                playerLayer.videoGravity = .resizeAspect
-            }
         }
     }
     

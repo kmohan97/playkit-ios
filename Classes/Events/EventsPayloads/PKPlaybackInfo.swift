@@ -15,19 +15,16 @@ import AVFoundation
 @objc public class PKPlaybackInfo: NSObject {
     
     /// The actual bitrate of the playback.
-    @objc public let bitrate: Double
+    public let bitrate: Double
     /// The selected track indicated bitrate.
-    @objc public let indicatedBitrate: Double
+    public let indicatedBitrate: Double
     /// The throughput of the playback (download speed)
-    @objc public let observedBitrate: Double
-    /// The URI of the playback item
-    @objc public let uri: String?
+    public let observedBitrate: Double
     
-    init(bitrate: Double, indicatedBitrate: Double, observedBitrate: Double, uri: String?) {
+    init(bitrate: Double, indicatedBitrate: Double, observedBitrate: Double) {
         self.bitrate = bitrate
         self.indicatedBitrate = indicatedBitrate
         self.observedBitrate = observedBitrate
-        self.uri = uri
     }
     
     convenience init(logEvent: AVPlayerItemAccessLogEvent) {
@@ -41,7 +38,6 @@ import AVFoundation
         }
         let indicatedBitrate = logEvent.indicatedBitrate
         let observedBitrate = logEvent.observedBitrate
-        let uri = logEvent.uri
-        self.init(bitrate: bitrate, indicatedBitrate: indicatedBitrate, observedBitrate: observedBitrate, uri: uri)
+        self.init(bitrate: bitrate, indicatedBitrate: indicatedBitrate, observedBitrate: observedBitrate)
     }
 }

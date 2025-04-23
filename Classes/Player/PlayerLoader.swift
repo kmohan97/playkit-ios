@@ -9,7 +9,6 @@
 // ===================================================================================================
 
 import Foundation
-import AVFoundation
 
 class LoadedPlugin: NSObject {
     var plugin: PKPlugin
@@ -42,40 +41,30 @@ class PlayerLoader: PlayerDecoratorBase {
         player.settings.contentRequestAdapter = KalturaPlaybackRequestAdapter()
         
         if let pluginConfigs = pluginConfig?.config {
-            var playerEngineWrapper: PlayerEngineWrapper?
-            
             for pluginName in pluginConfigs.keys {
                 let pluginConfig = pluginConfigs[pluginName]
                 do {
                     let pluginObject = try PlayKitManager.shared.createPlugin(name: pluginName, player: player, pluginConfig: pluginConfig, messageBus: self.messageBus)
-                    var playerDecorator: PlayerDecoratorBase? = nil
+                    var decorator: PlayerDecoratorBase? = nil
                     
-                    if let decorator = (pluginObject as? PlayerDecoratorProvider)?.getPlayerDecorator() {
-                        decorator.setPlayer(player)
-                        playerDecorator = decorator
-                        player = decorator
+                    if let d = (pluginObject as? PlayerDecoratorProvider)?.getPlayerDecorator() {
+                        d.setPlayer(player)
+                        decorator = d
+                        player = d
                     }
                     
-                    if let engineWrapper = (pluginObject as? PlayerEngineWrapperProvider)?.getPlayerEngineWrapper(), playerEngineWrapper == nil {
-                        playerEngineWrapper = engineWrapper
-                    }
-                    
-                    loadedPlugins[pluginName] = LoadedPlugin(plugin: pluginObject, decorator: playerDecorator)
+                    loadedPlugins[pluginName] = LoadedPlugin(plugin: pluginObject, decorator: decorator)
                 } catch {
                 }
-            }
-            
-            if let playerEW = playerEngineWrapper {
-                playerController.playerEngineWrapper = playerEW
             }
         }
         
         setPlayer(player)
     }
     
-    override func prepare(_ config: MediaConfig, mediaAsset: AVURLAsset? = nil) {
-        self.concreatePlayerController?.setMedia(from: config, mediaAsset: mediaAsset)
-        super.prepare(config, mediaAsset: mediaAsset)
+    override func prepare(_ config: MediaConfig) {
+        self.concreatePlayerController?.setMedia(from: config)
+        super.prepare(config)
         // update all loaded plugins with media config
         for (pluginName, loadedPlugin) in loadedPlugins {
             PKLog.verbose("Preparing plugin \(pluginName)")

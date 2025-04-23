@@ -16,17 +16,14 @@ import AVKit
     
     fileprivate var player: Player!
     
-    public func setPlayer(_ player: Player!) {
-        self.player = player
+    public var delegate: PlayerDelegate? {
+        get {
+            return self.player.delegate
+        }
+        set {
+            self.player.delegate = newValue
+        }
     }
-    
-    public func getPlayer() -> Player {
-        return self.player
-    }
-    
-    // ***************************** //
-    // MARK: - Player
-    // ***************************** //
 
     weak public var mediaEntry: PKMediaEntry? {
         return self.player.mediaEntry
@@ -40,64 +37,29 @@ import AVKit
         return self.player.mediaFormat
     }
     
-    public var sessionId: String {
-        return self.player.sessionId
+    public var currentTime: TimeInterval {
+        get {
+            return self.player.currentTime
+        }
+        set {
+            self.player.currentTime = newValue
+        }
     }
     
-    public func addObserver(_ observer: AnyObject, event: PKEvent.Type, block: @escaping (PKEvent) -> Void) {
-        //Assert.shouldNeverHappen();
+    public var currentProgramTime: Date? {
+        return self.player.currentProgramTime
     }
-    
-    public func addObserver(_ observer: AnyObject, events: [PKEvent.Type], block: @escaping (PKEvent) -> Void) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    public func removeObserver(_ observer: AnyObject, event: PKEvent.Type) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    public func removeObserver(_ observer: AnyObject, events: [PKEvent.Type]) {
-        //Assert.shouldNeverHappen();
-    }
-    
-    public func updatePluginConfig(pluginName: String, config: Any) {
-        self.player.updatePluginConfig(pluginName: pluginName, config: config)
-    }
-    
-    public func updateTextTrackStyling() {
-        self.player.updateTextTrackStyling()
-    }
-    
-    public func isLive() -> Bool {
-        return self.player.isLive()
-    }
-    
-    public func getController(type: PKController.Type) -> PKController? {
-        return self.player.getController(type: type)
-    }
-    
-    public func addPeriodicObserver(interval: TimeInterval, observeOn dispatchQueue: DispatchQueue? = nil, using block: @escaping (TimeInterval) -> Void) -> UUID {
-        return self.player.addPeriodicObserver(interval: interval, observeOn: dispatchQueue, using: block)
-    }
-    
-    public func addBoundaryObserver(boundaries: [PKBoundary], observeOn dispatchQueue: DispatchQueue? = nil, using block: @escaping (TimeInterval, Double) -> Void) -> UUID {
-        return self.player.addBoundaryObserver(boundaries: boundaries, observeOn: dispatchQueue, using: block)
-    }
-    
-    public func removePeriodicObserver(_ token: UUID) {
-        self.player.removePeriodicObserver(token)
-    }
-    
-    public func removeBoundaryObserver(_ token: UUID) {
-        self.player.removeBoundaryObserver(token)
-    }
-    
-    // ***************************** //
-    // MARK: - BasicPlayer
-    // ***************************** //
     
     public var duration: Double {
         return self.player.duration
+    }
+    
+    public var currentAudioTrack: String? {
+        return self.player.currentAudioTrack
+    }
+
+    public var currentTextTrack: String? {
+        return self.player.currentTextTrack
     }
     
     open var currentState: PlayerState {
@@ -116,35 +78,9 @@ import AVKit
             self.player.view = newValue
         }
     }
-
-    public var assetToPrepare: AVURLAsset? {
-        get {
-            return self.player.assetToPrepare
-        }
-        set {
-            self.player.assetToPrepare = newValue
-        }
-    }
     
-    public var currentTime: TimeInterval {
-        get {
-            return self.player.currentTime
-        }
-        set {
-            self.player.currentTime = newValue
-        }
-    }
-    
-    public var currentProgramTime: Date? {
-        return self.player.currentProgramTime
-    }
-    
-    public var currentAudioTrack: String? {
-        return self.player.currentAudioTrack
-    }
-
-    public var currentTextTrack: String? {
-        return self.player.currentTextTrack
+    public var sessionId: String {
+        return self.player.sessionId
     }
     
     public var rate: Float {
@@ -169,12 +105,32 @@ import AVKit
         return self.player.loadedTimeRanges
     }
     
+    open func prepare(_ config: MediaConfig) {
+        self.player.prepare(config)
+    }
+    
+    public func setPlayer(_ player: Player!) {
+        self.player = player
+    }
+    
+    public func getPlayer() -> Player {
+        return self.player
+    }
+    
+    open func destroy() {
+        self.player.destroy()
+    }
+    
     open func play() {
         self.player.play()
     }
     
     open func pause() {
         self.player.pause()
+    }
+    
+    open func seek(to time: TimeInterval) {
+        self.player.seek(to: time)
     }
     
     open func resume() {
@@ -189,23 +145,51 @@ import AVKit
         self.player.replay()
     }
     
-    open func seek(to time: TimeInterval) {
-        self.player.seek(to: time)
+    public func updatePluginConfig(pluginName: String, config: Any) {
+        self.player.updatePluginConfig(pluginName: pluginName, config: config)
+    }
+    
+    public func isLive() -> Bool {
+        return self.player.isLive()
+    }
+    
+    public func addObserver(_ observer: AnyObject, event: PKEvent.Type, block: @escaping (PKEvent) -> Void) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    public func addObserver(_ observer: AnyObject, events: [PKEvent.Type], block: @escaping (PKEvent) -> Void) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    public func removeObserver(_ observer: AnyObject, event: PKEvent.Type) {
+        //Assert.shouldNeverHappen();
+    }
+    
+    public func removeObserver(_ observer: AnyObject, events: [PKEvent.Type]) {
+        //Assert.shouldNeverHappen();
     }
     
     public func selectTrack(trackId: String) {
         self.player.selectTrack(trackId: trackId)
     }
     
-    open func destroy() {
-        self.player.destroy()
+    public func getController(type: PKController.Type) -> PKController? {
+        return self.player.getController(type: type)
     }
     
-    open func prepare(_ config: MediaConfig, mediaAsset: AVURLAsset? = nil) {
-        self.player.prepare(config, mediaAsset: mediaAsset)
+    public func addPeriodicObserver(interval: TimeInterval, observeOn dispatchQueue: DispatchQueue? = nil, using block: @escaping (TimeInterval) -> Void) -> UUID {
+        return self.player.addPeriodicObserver(interval: interval, observeOn: dispatchQueue, using: block)
     }
     
-    public func startBuffering() {
-        self.player.startBuffering()
+    public func addBoundaryObserver(boundaries: [PKBoundary], observeOn dispatchQueue: DispatchQueue? = nil, using block: @escaping (TimeInterval, Double) -> Void) -> UUID {
+        return self.player.addBoundaryObserver(boundaries: boundaries, observeOn: dispatchQueue, using: block)
+    }
+    
+    public func removePeriodicObserver(_ token: UUID) {
+        self.player.removePeriodicObserver(token)
+    }
+    
+    public func removeBoundaryObserver(_ token: UUID) {
+        self.player.removeBoundaryObserver(token)
     }
 }

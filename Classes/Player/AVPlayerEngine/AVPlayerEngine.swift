@@ -73,6 +73,7 @@ public class AVPlayerEngine: AVPlayer {
                                              changeHandler: { [weak self] (object, change) in
                                                 guard let self = self else { return }
                                                 guard let asset = self.asset else { return }
+                                                print("\n\nRGLOG::AVPlayerEngine::didSetAsset:: The asset status changed to: \(asset.status) \n\n\(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
                                                 PKLog.debug("The asset status changed to: \(asset.status)")
                                                 if asset.status == .prepared, self.shouldStartBuffering == true {
                                                     self.initializePlayerItem(asset)
@@ -117,6 +118,7 @@ public class AVPlayerEngine: AVPlayer {
             return time.isNaN ? 0 : time
         }
         set {
+            print("\n\nRGLOG::AVPlayerEngine::setCurrentPosition:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
             if newValue.isNaN { return }
             if newValue.isEqual(to: self.currentPosition) { return }
             let duration = self.duration
@@ -160,9 +162,7 @@ public class AVPlayerEngine: AVPlayer {
         
         PKLog.verbose("get duration: \(result)")
         // in some rare cases duration can be nan, in that case we will return 0.
-        let duration = result.isNaN ? 0.0 : result
-        internalDuration = duration
-        return duration
+        return result.isNaN ? 0.0 : result
     }
     
     var isPlaying: Bool {
@@ -233,7 +233,7 @@ public class AVPlayerEngine: AVPlayer {
         }
     }
     
-    // MARK: - Player Methods
+    // MARK: Player Methods
     
     override init() {
         PKLog.verbose("init AVPlayer")
@@ -258,6 +258,7 @@ public class AVPlayerEngine: AVPlayer {
     }
     
     public func stop() {
+        print("\n\nRGLOG::AVPlayerEngine::Stop player:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         PKLog.verbose("Stop player")
         self.pause()
         self.seek(to: CMTime.zero)
@@ -267,6 +268,7 @@ public class AVPlayerEngine: AVPlayer {
     }
     
     public func replay() {
+        print("\n\nRGLOG::AVPlayerEngine::Replay:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         PKLog.verbose("Replay item in player")
         self.pause()
         self.seek(to: CMTime.zero)
@@ -275,6 +277,7 @@ public class AVPlayerEngine: AVPlayer {
     }
     
     override public func pause() {
+        print("\n\nRGLOG::AVPlayerEngine::Pause:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         if self.rate > 0 {
             // Playing, so pause.
             PKLog.debug("Pause player")
@@ -283,6 +286,7 @@ public class AVPlayerEngine: AVPlayer {
     }
     
     override public func play() {
+        print("\n\nRGLOG::AVPlayerEngine::Play:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         if self.rate == 0 {
             PKLog.debug("Play player")
             self.post(event: PlayerEvent.Play())
@@ -292,6 +296,7 @@ public class AVPlayerEngine: AVPlayer {
     
     @available(iOS 10.0, tvOS 10.0,  *)
     override public func playImmediately(atRate rate: Float) {
+        print("\n\nRGLOG::AVPlayerEngine::Play immediately:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         if self.rate == 0 {
             PKLog.debug("Play immediately player")
             self.post(event: PlayerEvent.Play())
@@ -301,6 +306,7 @@ public class AVPlayerEngine: AVPlayer {
     }
     
     func seekToLiveEdge() {
+        print("\n\nRGLOG::AVPlayerEngine::seekToLiveEdge \n\n\(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         guard let currentItem = self.currentItem else {
             seekToLiveEdgeTriggered = true
             PKLog.error("Current item is empty, postpond seek to live edge.")
@@ -333,12 +339,14 @@ public class AVPlayerEngine: AVPlayer {
     }
     
     func playFromLiveEdge() {
+        print("\n\nRGLOG::AVPlayerEngine::playFromLiveEdge:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         seekToLiveEdge()
         self.play()
     }
     
     @available(iOS 10.0, tvOS 10.0, *)
     func playFromLiveEdgeImmediately(atRate rate: Float) {
+        print("\n\nRGLOG::AVPlayerEngine::playFromLiveEdgeImmediately:: \(print(Thread.callStackSymbols.forEach{print($0)}))\n\n\n");
         seekToLiveEdge()
         self.playImmediately(atRate: rate)
     }
@@ -353,7 +361,7 @@ public class AVPlayerEngine: AVPlayer {
     
     public func selectTrack(trackId: String) {
         guard let currentItem = self.currentItem else {
-            PKLog.error("Current item is empty")
+            PKLog.error("current item is empty")
             return
         }
         
@@ -367,7 +375,7 @@ public class AVPlayerEngine: AVPlayer {
                 }
             }
         } else {
-            PKLog.error("TrackId is nil")
+            PKLog.error("trackId is nil")
         }
     }
     
@@ -380,45 +388,6 @@ public class AVPlayerEngine: AVPlayer {
         PKLog.debug("stateChanged:: new:\(newState) old:\(oldState)")
         let stateChangedEvent: PKEvent = PlayerEvent.StateChanged(newState: newState, oldState: oldState)
         self.post(event: stateChangedEvent)
-    }
-    
-    func updateTextTrackStyling(_ textTrackStyling: PKTextTrackStyling) {
-        // Currently we only support these, there are more.
-        let foregroundColorARGBKey: String = kCMTextMarkupAttribute_ForegroundColorARGB as String
-        let backgroundColorARGBKey: String = kCMTextMarkupAttribute_BackgroundColorARGB as String
-        let baseFontSizePercentageRelativeToVideoHeightKey: String = kCMTextMarkupAttribute_BaseFontSizePercentageRelativeToVideoHeight as String
-        let characterEdgeStyleKey: String = kCMTextMarkupAttribute_CharacterEdgeStyle as String
-        let characterBackgroundColorARGBKey: String = kCMTextMarkupAttribute_CharacterBackgroundColorARGB as String
-        let fontFamilyNameKey: String = kCMTextMarkupAttribute_FontFamilyName as String
-        
-        var attributes: [String : Any] = [:]
-        if let foregroundColor = textTrackStyling.textColor {
-            attributes.updateValue([foregroundColor.alpha, foregroundColor.red, foregroundColor.green, foregroundColor.blue], forKey: foregroundColorARGBKey)
-        }
-        
-        if let backgroundColor = textTrackStyling.backgroundColor {
-            attributes.updateValue([backgroundColor.alpha, backgroundColor.red, backgroundColor.green, backgroundColor.blue], forKey: backgroundColorARGBKey)
-        }
-        
-        if let baseFontSize = textTrackStyling.textSize {
-            attributes.updateValue(baseFontSize, forKey: baseFontSizePercentageRelativeToVideoHeightKey)
-        }
-        
-        attributes.updateValue(textTrackStyling.edgeStyle.description, forKey: characterEdgeStyleKey)
-        
-        if let characterBackgroundColor = textTrackStyling.edgeColor {
-            attributes.updateValue([characterBackgroundColor.alpha, characterBackgroundColor.red, characterBackgroundColor.green, characterBackgroundColor.blue], forKey: characterBackgroundColorARGBKey)
-        }
-        
-        if let fontFamily = textTrackStyling.fontFamily {
-            attributes.updateValue(fontFamily, forKey: fontFamilyNameKey)
-        }
-        
-        guard let textStyleRule = AVTextStyleRule(textMarkupAttributes: attributes) else {
-            PKLog.debug("Couldn't create AVTextStyleRule.")
-            return
-        }
-        self.currentItem?.textStyleRules = [textStyleRule]
     }
 }
 
@@ -452,6 +421,7 @@ extension AVPlayerEngine: AppStateObservable {
     }
     
     func startBackgroundTask() {
+        
         self.backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(withName: "AVPlayerEngineBackgroundTask", expirationHandler: { [weak self] in
             guard let self = self else { return }
             

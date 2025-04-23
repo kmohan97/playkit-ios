@@ -17,20 +17,14 @@ import Foundation
     /************************************************************/
     
     @objc public static let allEventTypes: [AdEvent.Type] = [
-        streamLoaded, streamStarted, adBreakReady, adBreakStarted, adBreakEnded, adPeriodStarted, adPeriodEnded, allAdsCompleted, adComplete, adClicked,
-        adFirstQuartile, adLoaded, adLog, adMidpoint, adPaused, adResumed, adSkipped, adStarted, adTapped, adThirdQuartile,
-        adDidProgressToTime, adDidRequestContentPause, adDidRequestContentResume, webOpenerEvent, adWebOpenerWillOpenExternalBrowser,
-        adWebOpenerWillOpenInAppBrowser, adWebOpenerDidOpenInAppBrowser, adWebOpenerWillCloseInAppBrowser, adWebOpenerDidCloseInAppBrowser,
-        adCuePointsUpdate, adStartedBuffering, adPlaybackReady, requestTimedOut, adsRequested, error
+        adBreakReady, allAdsCompleted, adComplete, adClicked, adFirstQuartile, adLoaded, adLog, adMidpoint, adPaused,
+        adResumed, adSkipped, adStarted, adTapped, adThirdQuartile, adDidProgressToTime, adDidRequestContentPause,
+        adDidRequestContentResume, webOpenerEvent, adWebOpenerWillOpenExternalBrowser, adWebOpenerWillOpenInAppBrowser,
+        adWebOpenerDidOpenInAppBrowser, adWebOpenerWillCloseInAppBrowser, adWebOpenerDidCloseInAppBrowser, adCuePointsUpdate,
+        adStartedBuffering, adPlaybackReady, requestTimedOut, adsRequested, error
     ]
     
-    @objc public static let streamLoaded: AdEvent.Type = StreamLoaded.self // DAI
-    @objc public static let streamStarted: AdEvent.Type = StreamStarted.self // DAI
     @objc public static let adBreakReady: AdEvent.Type = AdBreakReady.self
-    @objc public static let adBreakStarted: AdEvent.Type = AdBreakStarted.self // DAI
-    @objc public static let adBreakEnded: AdEvent.Type = AdBreakEnded.self // DAI
-    @objc public static let adPeriodStarted: AdEvent.Type = AdPeriodStarted.self // DAI
-    @objc public static let adPeriodEnded: AdEvent.Type = AdPeriodEnded.self // DAI
     @objc public static let allAdsCompleted: AdEvent.Type = AllAdsCompleted.self
     @objc public static let adComplete: AdEvent.Type = AdComplete.self
     @objc public static let adClicked: AdEvent.Type = AdClicked.self
@@ -71,9 +65,6 @@ import Foundation
     // MARK: - Events
     /************************************************************/
     
-    public class StreamLoaded: AdEvent {}
-    public class StreamStarted: AdEvent {}
-    
     public class AdStarted: AdEvent {
         public convenience init(adInfo: PKAdInfo) {
             self.init([AdEventDataKeys.adInfo: adInfo])
@@ -87,10 +78,6 @@ import Foundation
     }
     
     public class AdBreakReady: AdEvent {}
-    public class AdBreakStarted: AdEvent {} // DAI
-    public class AdBreakEnded: AdEvent {} // DAI
-    public class AdPeriodStarted: AdEvent {} // DAI
-    public class AdPeriodEnded: AdEvent {} // DAI
     public class AllAdsCompleted: AdEvent {}
     public class AdComplete: AdEvent {}
     public class AdClicked: AdEvent {
@@ -114,9 +101,6 @@ import Foundation
     public class AdCuePointsUpdate: AdEvent {
         public convenience init(adCuePoints: PKAdCuePoints) {
             self.init([AdEventDataKeys.adCuePoints: adCuePoints])
-        }
-        public convenience init(adDAICuePoints: PKAdDAICuePoints) {
-            self.init([AdEventDataKeys.adDAICuePoints: adDAICuePoints])
         }
     }
     
@@ -170,7 +154,6 @@ import Foundation
     public static let webOpener = "webOpener"
     public static let error = "error"
     public static let adCuePoints = "adCuePoints"
-    public static let adDAICuePoints = "adDAICuePoints"
     public static let adInfo = "adInfo"
     public static let adTagUrl = "adTagUrl"
     public static let clickThroughUrl = "clickThroughUrl"
@@ -201,11 +184,6 @@ extension PKEvent {
     /// Ad cue points, PKEvent Ad Data Accessor
     @objc public var adCuePoints: PKAdCuePoints? {
         return self.data?[AdEventDataKeys.adCuePoints] as? PKAdCuePoints
-    }
-    
-    /// Ad DAI cue points, PKEvent Ad Data Accessor
-    @objc public var adDAICuePoints: PKAdDAICuePoints? {
-        return self.data?[AdEventDataKeys.adDAICuePoints] as? PKAdDAICuePoints
     }
     
     /// TotalTime, PKEvent Ad Data Accessor

@@ -40,20 +40,14 @@ fileprivate let durationKey = "duration"
     @objc public var mediaType: MediaType = .unknown
     @objc public var metadata: [String: String]?
     @objc public var name: String?
-    @objc public var externalSubtitles: [PKExternalSubtitle]?
    
     var vrData: VRData?
     public var tags: String? {
         didSet {
             //creating media entry with the above sources
             let vrKey = "360"
-            if let mediaTags = self.tags {
-                for tag in mediaTags.components(separatedBy: ",") {
-                    if tag.equals(vrKey) {
-                        self.vrData = VRData()
-                        break
-                    }
-                }
+            if let mediaTags = self.tags, mediaTags.contains(vrKey) {
+                self.vrData = VRData()
             }
         }
     }
@@ -101,11 +95,11 @@ fileprivate let durationKey = "duration"
     @objc override public var description: String {
         get {
             return "id : \(self.id)," +
-                " sources: \(String(describing: self.sources))," +
-                " duration: \(duration)," +
-                " mediaType: \(mediaType.description)," +
-                " metadata: \(String(describing: metadata))," +
-                " name: \(String(describing: name))"
+                "\n sources: \(String(describing: self.sources))," +
+                "\n duration: \(duration)," +
+                "\n mediaType: \(mediaType.description)," +
+                "\n metadata: \(String(describing: metadata))," +
+                "\n name: \(String(describing: name))"
         }
     }
     
@@ -156,7 +150,7 @@ fileprivate let durationKey = "duration"
         let scheme: Scheme = Scheme(rawValue: schemeValue) ?? .unknown
         
         if let fpsCertificate = sj["fpsCertificate"].string {
-            return FairPlayDRMParams(licenseUri: licenseUri, base64EncodedCertificate: fpsCertificate)
+            return FairPlayDRMParams(licenseUri: licenseUri, scheme: .fairplay, base64EncodedCertificate: fpsCertificate)
         } else {
             return DRMParams(licenseUri: licenseUri, scheme: scheme)
         }
@@ -166,21 +160,8 @@ fileprivate let durationKey = "duration"
 public class FairPlayDRMParams: DRMParams {
     @objc public var fpsCertificate: Data?
     
-    internal var licenseProvider: FairPlayLicenseProvider?
-    
-    @available(*, deprecated, message: "Use init(licenseUri:base64EncodedCertificate:) instead")
     @objc public init(licenseUri: String, scheme: Scheme, base64EncodedCertificate: String) {
         fpsCertificate = Data(base64Encoded: base64EncodedCertificate)
         super.init(licenseUri: licenseUri, scheme: scheme)
     }
-
-    @objc public init(licenseUri: String, base64EncodedCertificate: String) {
-        fpsCertificate = Data(base64Encoded: base64EncodedCertificate)
-        super.init(licenseUri: licenseUri, scheme: .fairplay)
-    }
-}
-
-@objc public protocol FairPlayLicenseProvider {
-    @objc func getLicense(spc: Data, assetId: String, requestParams: PKRequestParams,
-                          callback: @escaping (_ ckc: Data?, _ offlineDuration: TimeInterval, _ error: Error?) -> Void)
 }

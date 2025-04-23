@@ -22,11 +22,12 @@ import Foundation
 
 @objc public class PKRequestParams: NSObject {
     
-    @objc public let url: URL
-    @objc public let headers: [String: String]?
+    public let url: URL
+    public let headers: [String: String]?
     
-    @objc public init(url: URL, headers: [String: String]?) {
+    @objc init(url: URL, headers: [String: String]?) {
         self.url = url
         self.headers = headers
     }
 }
+

@@ -13,76 +13,6 @@ import Foundation
 import AVFoundation
 import SwiftyJSON
 
-import PlayKitUtils
-
-struct KalturaLicenseResponseContainer: Codable {
-    var ckc: String?
-    var persistence_duration: TimeInterval?
-}
-
-class KalturaFairPlayLicenseProvider: FairPlayLicenseProvider {
-    
-    static let sharedInstance = KalturaFairPlayLicenseProvider()
-    
-    func getLicense(spc: Data, assetId: String, requestParams: PKRequestParams, callback: @escaping (Data?, TimeInterval, Error?) -> Void) {
-        var request = URLRequest(url: requestParams.url)
-        
-        // uDRM requires application/octet-stream as the content type.
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        
-        // Also add the user agent
-        request.setValue(PlayKitManager.userAgent, forHTTPHeaderField: "User-Agent")
-        
-        // Add other optional headers
-        if let headers = requestParams.headers {
-            for (header, value) in headers {
-                request.setValue(value, forHTTPHeaderField: header)
-            }
-        }
-        
-        request.httpBody = spc.base64EncodedData()
-        request.httpMethod = "POST"
-        
-        PKLog.debug("Sending SPC to server")
-        let startTime = Date.timeIntervalSinceReferenceDate
-        let dataTask = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) -> Void in
-            
-            if let error = error {
-                callback(nil, 0, FPSError.serverError(error, requestParams.url))
-                return
-            }
-
-            do {
-                let endTime: Double = Date.timeIntervalSinceReferenceDate
-                PKLog.debug("Got response in \(endTime-startTime) sec")
-                
-                guard let data = data, data.count > 0 else {
-                    callback(nil, 0, FPSError.malformedServerResponse)
-                    return
-                }
-                
-                let lic = try JSONDecoder().decode(KalturaLicenseResponseContainer.self, from: data)
-                
-                guard let ckc = lic.ckc else {
-                    callback(nil, 0, FPSError.noCKCInResponse)
-                    return
-                }
-                
-                guard let ckcData = Data(base64Encoded: ckc) else {
-                    callback(nil, 0, FPSError.malformedCKCInResponse)
-                    return
-                }
-                
-                callback(ckcData, lic.persistence_duration ?? 0, nil)
-                
-            } catch let e {
-                callback(nil, 0, e)
-            }
-        }
-        dataTask.resume()
-    }
-}
-
 class FPSLicenseHelper {
     
     let assetId: String
@@ -114,27 +44,39 @@ class FPSLicenseHelper {
         self.dataStore = dataStore
     }
     
-    func performCKCRequest(_ spcData: Data, assetId: String, url: URL, callback: @escaping (FPSLicense?, Error?) -> Void) {
+    func performCKCRequest(_ spcData: Data, url: URL, callback: @escaping (FPSLicense?, Error?) -> Void) {
         
         
-        var requestParams = PKRequestParams(url: url, headers: nil)
-        
+        var requestParams = PKRequestParams(url: url, headers: ["Content-Type": "application/octet-stream"])
+
         if let adapter = self.params?.requestAdapter {
             requestParams = adapter.adapt(requestParams: requestParams)
         }
         
-        let licenseProvider = self.params?.licenseProvider ?? KalturaFairPlayLicenseProvider.sharedInstance
-
-        licenseProvider.getLicense(spc: spcData, assetId: assetId,
-                                               requestParams: requestParams) { (ckc, duration, error) in
-                                                
-                                                guard let ckc = ckc else {
-                                                    callback(nil, error)
-                                                    return
-                                                }
-                                                
-                                                callback(FPSLicense(ckc: ckc, duration: duration), nil)
+        var request = URLRequest(url: requestParams.url)
+        if let headers = requestParams.headers {
+            for (header, value) in headers {
+                request.setValue(value, forHTTPHeaderField: header)
+            }
         }
+
+        request.httpBody = spcData.base64EncodedData()
+        request.httpMethod = "POST"
+        
+        PKLog.debug("Sending SPC to server")
+        let startTime = Date.timeIntervalSinceReferenceDate
+        let dataTask = URLSession.shared.dataTask(with: request) { (data: Data?, response: URLResponse?, error: Error?) -> Void in
+            do {
+                let endTime: Double = Date.timeIntervalSinceReferenceDate
+                PKLog.debug("Got response in \(endTime-startTime) sec")
+                let lic = try FPSLicense(jsonResponse: data)
+                callback(lic, nil)
+                
+            } catch let e {
+                callback(nil, e)
+            }
+        }
+        dataTask.resume()
     }
 
     func handleLicenseRequest(_ request: FPSLicenseRequest, done callback: @escaping (Error?) -> Void) {
@@ -185,7 +127,7 @@ class FPSLicenseHelper {
             guard let spcData = spcData else { return }
             
             // Send SPC to Key Server and obtain CKC
-            self.performCKCRequest(spcData, assetId: assetId, url: params.url) { (license, error) in
+            self.performCKCRequest(spcData, url: params.url) { (license, error) in
                 guard let license = license else {
                     request.processContentKeyResponseError(error)
                     done(error)
@@ -193,14 +135,6 @@ class FPSLicenseHelper {
                 }
                                 
                 if shouldPersist {
-                    
-                    if license.isExpired() {
-                        let error = FPSError.invalidLicenseDuration
-                        request.processContentKeyResponseError(error)
-                        done(error)
-                        return
-                    }
-                    
                     do {
                         let pck = try request.persistableContentKey(fromKeyVendorResponse: license.data, options: nil)
                         license.data = pck

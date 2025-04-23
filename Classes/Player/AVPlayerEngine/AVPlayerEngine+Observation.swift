@@ -25,8 +25,7 @@ extension AVPlayerEngine {
             #keyPath(currentItem.isPlaybackBufferEmpty),
             #keyPath(currentItem.isPlaybackBufferFull),
             #keyPath(currentItem.loadedTimeRanges),
-            #keyPath(currentItem.timedMetadata),
-            #keyPath(currentItem.duration)
+            #keyPath(currentItem.timedMetadata)
         ]
     }
     
@@ -69,6 +68,7 @@ extension AVPlayerEngine {
     }
     
     @objc func onAccessLogEntryNotification(notification: Notification) {
+        print("\n\nRGLOG::AVPlayerEngine::onAccessLogEntryNotification::\(notification)\n\n");
         if let playerItem = notification.object as? AVPlayerItem, let accessLog = playerItem.accessLog(),
             let lastEvent = accessLog.events.last, playerItem === self.currentItem {
             if #available(iOS 10.0, tvOS 10.0, *) {
@@ -84,6 +84,7 @@ extension AVPlayerEngine {
     }
     
     @objc func onErrorLogEntryNotification(notification: Notification) {
+        print("\n\nRGLOG::AVPlayerEngine::onErrorLogEntryNotification::\(notification)\n\n");
         guard let playerItem = notification.object as? AVPlayerItem,
             let errorLog = playerItem.errorLog(),
             let lastEvent = errorLog.events.last,
@@ -94,6 +95,7 @@ extension AVPlayerEngine {
     
     @objc func onPlaybackStalledNotification(notification: Notification) {
         // post notification only for current player item.
+        print("\n\nRGLOG::AVPlayerEngine::onPlaybackStalledNotification::\(notification)\n\n");
         guard let notificationObject = notification.object as? AVPlayerItem, notificationObject === self.currentItem else { return }
         
         self.post(event: PlayerEvent.PlaybackStalled())
@@ -101,6 +103,7 @@ extension AVPlayerEngine {
     
     @objc func didFailToPlayToEndTime(_ notification: NSNotification) {
         // post notification only for current player item.
+        print("\n\nRGLOG::AVPlayerEngine::didFailToPlayToEndTime::\(notification)\n\n");
         guard let notificationObject = notification.object as? AVPlayerItem, notificationObject === self.currentItem else { return }
         let newState = PlayerState.error
         self.postStateChange(newState: newState, oldState: self.currentState)
@@ -115,6 +118,7 @@ extension AVPlayerEngine {
     
     @objc func didPlayToEndTime(_ notification: NSNotification) {
         // post notification only for current player item.
+        print("\n\nRGLOG::AVPlayerEngine::didPlayToEndTime::\(notification)\n\n");
         guard let notificationObject = notification.object as? AVPlayerItem, notificationObject === self.currentItem else { return }
         let newState = PlayerState.ended
         self.postStateChange(newState: newState, oldState: self.currentState)
@@ -128,7 +132,7 @@ extension AVPlayerEngine {
     
     override public func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         PKLog.verbose("observeValue:: onEvent/onState")
-        
+        print("\n\nRGLOG::AVPlayerEngine::observeValue(forKeyPath::\(String(describing: keyPath)), change - \(String(describing: change))\n\n");
         guard context == &AVPlayerEngine.observerContext else {
             super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
             return
@@ -143,16 +147,19 @@ extension AVPlayerEngine {
         switch keyPath {
         case #keyPath(currentItem.isPlaybackLikelyToKeepUp):
             guard let isPlaybackLikelyToKeepUp = currentItem?.isPlaybackLikelyToKeepUp else { return }
+            
             if (isPlaybackLikelyToKeepUp) {
                 self.handleLikelyToKeepUp()
             }
         case #keyPath(currentItem.isPlaybackBufferEmpty):
             guard let isPlaybackBufferEmpty = currentItem?.isPlaybackBufferEmpty else { return }
+            
             if (isPlaybackBufferEmpty) {
                 self.handleBufferEmptyChange()
             }
         case #keyPath(currentItem.isPlaybackBufferFull):
             guard let isPlaybackBufferFull = currentItem?.isPlaybackBufferFull else { return }
+            
             if (isPlaybackBufferFull) {
                 PKLog.debug("Buffer Full")
             }
@@ -161,26 +168,21 @@ extension AVPlayerEngine {
             // convert values to PKTimeRange
             let timeRanges = loadedTimeRanges.map { PKTimeRange(timeRange: $0.timeRangeValue) }
             self.post(event: PlayerEvent.LoadedTimeRanges(timeRanges: timeRanges))
-        case #keyPath(rate):
-            self.handleRate()
+        case #keyPath(rate): self.handleRate()
         case #keyPath(status):
             guard let statusChange = change?[.newKey] as? NSNumber, let newPlayerStatus = AVPlayer.Status(rawValue: statusChange.intValue) else {
                 PKLog.error("unknown player status")
                 return
             }
             self.handle(status: newPlayerStatus)
-        case #keyPath(currentItem):
-            self.handleItemChange()
+        case #keyPath(currentItem): self.handleItemChange()
         case #keyPath(currentItem.status):
             guard let statusChange = change?[.newKey] as? NSNumber, let newPlayerItemStatus = AVPlayerItem.Status(rawValue: statusChange.intValue) else {
                 PKLog.error("unknown player item status")
                 return
             }
             self.handle(playerItemStatus: newPlayerItemStatus)
-        case #keyPath(currentItem.timedMetadata):
-            self.handleTimedMedia()
-        case #keyPath(currentItem.duration):
-            self.handleDurationChanged()
+        case #keyPath(currentItem.timedMetadata): self.handleTimedMedia()
         default: super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
         }
     }
@@ -205,6 +207,7 @@ extension AVPlayerEngine {
     @objc func timebaseChanged(notification: Notification) {
         // For some reason timebase rate changed is received on a background thread.
         // in order to check self.rate we must make sure we are on the main thread.
+        print("\n\nRGLOG::AVPlayerEngine::timebaseChanged::\(notification)\n\n");
         DispatchQueue.main.async {
             guard let timebase = self.currentItem?.timebase else { return }
             PKLog.verbose("timebase changed, current timebase: \(String(describing: timebase))")
@@ -214,7 +217,7 @@ extension AVPlayerEngine {
             } else if timebaseRate == 0 && self.rate == 0 && self.lastTimebaseRate != timebaseRate {
                 self.post(event: PlayerEvent.Pause())
             }
-            // Make sure to save the last value so we could only post events only when currentTimebase != lastTimebase
+            // make sure to save the last value so we could only post events only when currentTimebase != lastTimebase
             self.lastTimebaseRate = timebaseRate
         }
     }
@@ -222,22 +225,15 @@ extension AVPlayerEngine {
     /// Handles changes in player rate
     private func handleRate() {
         PKLog.debug("player rate was changed, now: \(self.rate)")
-        // When setting automaticallyWaitsToMinimizeStalling and shouldPlayImmediately, the player may be stalled and the rate will be changed to 0, player paused, by the AVPlayer. Therefor we are sending a paused event.
-        if let isPlaybackLikelyToKeepUp = self.currentItem?.isPlaybackLikelyToKeepUp, isPlaybackLikelyToKeepUp == false {
-            if self.rate == 0, self.currentState == .buffering || self.currentState == .ready {
-                self.post(event: PlayerEvent.Pause())
-            }
-        }
     }
     
     private func handle(status: AVPlayer.Status) {
         switch status {
         case .readyToPlay:
             PKLog.debug("player is ready to play player items")
-            // Try to set the start position before the player item is ready, to avoid a glitch on VOD
-            if self.duration != 0 {
-                PKLog.debug("duration in seconds: \(duration)")
+            if self.startPosition > 0 {
                 self.currentPosition = self.startPosition
+                self.startPosition = 0
             }
         case .failed:
             PKLog.error("player failed you must recreate the player instance")
@@ -269,10 +265,10 @@ extension AVPlayerEngine {
                     self.handleTracksSelection(tracks)
                     self.post(event: PlayerEvent.TracksAvailable(tracks: tracks))
                 })
-                // When player item is readyToPlay for the first time it is safe to assume we have a valid duration for VOD.
-                if self.duration != 0 {
-                    PKLog.debug("duration in seconds: \(duration)")
-                    self.currentPosition = self.startPosition
+                // when player item is readyToPlay for the first time it is safe to assume we have a valid duration.
+                if let duration = self.currentItem?.duration, !CMTIME_IS_INDEFINITE(duration) {
+                    PKLog.debug("duration in seconds: \(CMTimeGetSeconds(duration))")
+                    self.post(event: PlayerEvent.DurationChanged(duration: CMTimeGetSeconds(duration)))
                 }
                 self.post(event: PlayerEvent.LoadedMetadata())
                 self.post(event: PlayerEvent.CanPlay())
@@ -295,16 +291,6 @@ extension AVPlayerEngine {
         let newState = PlayerState.idle
         self.postStateChange(newState: newState, oldState: self.currentState)
         self.currentState = newState
-        
-        // Update new current item with the text track styling which was set, when we have a currentItem.
-        if currentItem != nil, let textTrackStyling = self.asset?.playerSettings.textTrackStyling {
-            self.updateTextTrackStyling(textTrackStyling)
-        }
-        
-        // If seek to live edge was triggered, perform it when we have a currentItem.
-        if currentItem != nil, seekToLiveEdgeTriggered {
-            self.seekToLiveEdge()
-        }
     }
     
     private func handleTimedMedia() {
@@ -344,7 +330,7 @@ extension AVPlayerEngine {
         // handle text selection mode, default is to turn subtitles off.
         switch trackSelection.textSelectionMode {
         case .off:
-            guard let track = tracks.textTracks?.first(where: { $0.title == TracksManager.textOffDisplay && $0.language == nil }) else { break }
+            guard let track = tracks.textTracks?.first(where: { $0.title == TracksManager.textOffDisplay && $0.language == nil }) else { return }
             self.selectTrack(trackId: track.id)
         case .auto:
             handleAutoMode(for: tracks.textTracks)
@@ -357,13 +343,6 @@ extension AVPlayerEngine {
             handleAutoMode(for: tracks.audioTracks)
         case .selection:
             handleSelectionMode(for: tracks.audioTracks, language: trackSelection.audioSelectionLanguage)
-        }
-    }
-    
-    func handleDurationChanged() {
-        if let duration = self.currentItem?.duration, !CMTIME_IS_INDEFINITE(duration) {
-            PKLog.debug("Duration in seconds: \(CMTimeGetSeconds(duration))")
-            internalDuration = CMTimeGetSeconds(duration)
         }
     }
 }

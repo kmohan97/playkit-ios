@@ -9,30 +9,24 @@
 // ===================================================================================================
 
 import Foundation
-import AVFoundation
 
 @objc public protocol PlayerEngine: BasicPlayer {
-    /// Fired when an event is triggred.
+    /// Fired when some event is triggred.
     var onEventBlock: ((PKEvent) -> Void)? { get set }
     
-    /// The player's start position.
+    /// The player's start time.
     var startPosition: TimeInterval { get set }
     
-    /// The player's current position.
+    /// The player's current time.
     var currentPosition: TimeInterval { get set }
     
-    /// The current media config that was set.
     var mediaConfig: MediaConfig? { get set }
     
-    /// The media playback type.
     var playbackType: String? { get }
     
-    /// Load the media to the player.
-    func loadMedia(from mediaSource: PKMediaSource?, mediaAsset: AVURLAsset?, handler: AssetHandler)
+    /// Load media on player
+    func loadMedia(from mediaSource: PKMediaSource?, handler: AssetHandler)
     
-    /// Plays the live media from the live edge.
+    /// Plays the live media from the live edge
     func playFromLiveEdge()
-    
-    /// Update the text tracks styling.
-    func updateTextTrackStyling(_ textTrackStyling: PKTextTrackStyling)
 }

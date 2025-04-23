@@ -10,7 +10,14 @@
 
 import UIKit
 
+@objc public protocol PlayerDelegate {
+    @objc optional func playerShouldPlayAd(_ player: Player) -> Bool
+}
+
 @objc public protocol Player: BasicPlayer {
+    
+    /// The player's delegate.
+    @objc weak var delegate: PlayerDelegate? { get set }
     
     /// The player's associated media entry.
     @objc weak var mediaEntry: PKMediaEntry? { get }
@@ -38,9 +45,6 @@ import UIKit
     
     /// Update Plugin Config.
     @objc func updatePluginConfig(pluginName: String, config: Any)
-    
-    /// Updates the styling from the settings textTrackStyling object
-    @objc func updateTextTrackStyling()
     
     
     /// Indicates if current media is Live.
@@ -97,8 +101,4 @@ extension Player {
 
 public protocol PlayerDecoratorProvider {
     func getPlayerDecorator() -> PlayerDecoratorBase?
-}
-
-public protocol PlayerEngineWrapperProvider {
-    func getPlayerEngineWrapper() -> PlayerEngineWrapper?
 }
